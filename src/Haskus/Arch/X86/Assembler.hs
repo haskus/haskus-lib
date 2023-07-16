@@ -4,6 +4,7 @@ module Haskus.Arch.X86.Assembler where
 
 import Data.Word
 import Data.Int
+import Data.Bits
 import Numeric
 
 
@@ -23,6 +24,25 @@ data Reg
   | BP | EBP | RBP
   | SP | ESP | RSP
   deriving (Show,Eq,Ord)
+
+-- | Legacy 8-bits registers
+isLegacyReg8 :: Reg -> Maybe RegCode
+isLegacyReg8 = \case
+  AL -> Just 0
+  BL -> Just 3
+  CL -> Just 1
+  DL -> Just 2
+  AH -> Just 4
+  BH -> Just 7
+  CH -> Just 5
+  DH -> Just 6
+  _  -> Nothing
+
+type RegCode = Word8
+
+emitModRM_rr :: RegCode -> RegCode -> Asm ()
+emitModRM_rr r rm = emit (0b11000000 .|. (r .<<. 3) .|. rm)
+
 
 -- | TODO: sublanguage for memory addresses with labels/expressions
 data Expr
@@ -146,6 +166,16 @@ assemble opts = \cases
   AAS [] -> do
     check opts [Arch8086,NoLong]
     emit 0x3f
+
+  ADC [OpReg x,OpReg y]
+    | Just rx <- isLegacyReg8 x
+    , Just ry <- isLegacyReg8 y
+    -> do
+    check opts [Arch8086]
+    -- we could use 0x12 opcode too.
+    -- It enables reversed arguments, which makes no difference for ADC.
+    emit 0x10
+    emitModRM_rr rx ry
 
   oc ops -> do
     error $ "Unexpected instruction: " ++ show oc ++ " " ++ show ops
